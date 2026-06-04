@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบประชุมออนไลน์ — เทศบาลตำบลบ้านยาง</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Sans+Thai:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --c-navy: #0f2744;
+  --c-blue: #1a4d8f;
+  --c-accent: #2e7de3;
+  --c-accent-lt: #e8f1fc;
+  --c-gold: #c9a227;
+  --c-gold-lt: #fdf6e3;
+  --c-red: #d63031;
+  --c-green: #00b894;
+  --c-green-lt: #e8fdf7;
+  --c-warn: #e17055;
+  --c-bg: #f4f6fb;
+  --c-surface: #ffffff;
+  --c-border: #d9e2f0;
+  --c-text: #0f2744;
+  --c-muted: #7a8caa;
+  --radius: 10px;
+  --shadow: 0 2px 12px rgba(15,39,68,0.10);
+  --shadow-lg: 0 8px 32px rgba(15,39,68,0.14);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var(--c-bg); color: var(--c-text); min-height: 100vh; font-size: 15px; }
+
+/* ============ PAGE SYSTEM ============ */
+.page { display: none; min-height: 100vh; }
+.page.active { display: flex; flex-direction: column; }
+
+/* ============ LOGIN PAGE ============ */
+#loginPage {
+  background: linear-gradient(145deg, var(--c-navy) 0%, var(--c-blue) 60%, #1d6fc9 100%);
+  align-items: center; justify-content: center;
+}
+.login-card {
+  background: var(--c-surface); border-radius: 18px; padding: 3rem 2.5rem;
+  width: 100%; max-width: 420px; box-shadow: var(--shadow-lg);
+}
+.login-logo { text-align: center; margin-bottom: 2rem; }
+.login-logo .emblem {
+  width: 70px; height: 70px; border-radius: 50%;
+  background: var(--c-navy); display: inline-flex; align-items: center; justify-content: center;
+  font-size: 2rem; color: var(--c-gold); margin-bottom: 1rem; border: 3px solid var(--c-gold);
+}
+.login-logo h1 { font-size: 1.1rem; font-weight: 600; color: var(--c-navy); line-height: 1.4; }
+.login-logo p { font-size: 0.85rem; color: var(--c-muted); margin-top: 4px; }
+.form-group { margin-bottom: 1.2rem; }
+.form-group label { display: block; font-size: 0.85rem; font-weight: 500; color: var(--c-muted); margin-bottom: 6px; }
+.form-group input {
+  width: 100%; padding: 11px 14px; border: 1.5px solid var(--c-border);
+  border-radius: var(--radius); font-family: inherit; font-size: 0.95rem;
+  transition: border 0.2s; outline: none; color: var(--c-text);
+}
+.form-group input:focus { border-color: var(--c-accent); }
+.btn-primary {
+  width: 100%; padding: 12px; background: var(--c-navy); color: white;
+  border: none; border-radius: var(--radius); font-family: inherit; font-size: 1rem;
+  font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.1s;
+}
+.btn-primary:hover { background: var(--c-blue); }
+.btn-primary:active { transform: scale(0.98); }
+.error-msg { background: #fff0f0; color: var(--c-red); padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; margin-top: 1rem; display: none; border-left: 3px solid var(--c-red); }
+
+/* ============ MAIN LAYOUT ============ */
+.topbar {
+  background: var(--c-navy); color: white; padding: 0 1.5rem;
+  height: 56px; display: flex; align-items: center; gap: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2); flex-shrink: 0; position: sticky; top: 0; z-index: 100;
+}
+.topbar-logo { font-weight: 700; font-size: 1rem; color: var(--c-gold); letter-spacing: 0.3px; flex: 1; }
+.topbar-user { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; }
+.topbar-user .avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--c-gold);
+  display: flex; align-items: center; justify-content: center; color: var(--c-navy);
+  font-weight: 700; font-size: 0.85rem;
+}
+.role-badge {
+  padding: 2px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;
+}
+.role-badge.superadmin { background: var(--c-gold); color: var(--c-navy); }
+.role-badge.admin { background: #6c5ce7; color: white; }
+.role-badge.host { background: var(--c-accent); color: white; }
+.role-badge.member { background: var(--c-border); color: var(--c-muted); }
+.btn-logout { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; font-size: 0.8rem; transition: background 0.2s; }
+.btn-logout:hover { background: rgba(255,255,255,0.2); }
+
+.nav-tabs { background: var(--c-surface); border-bottom: 1px solid var(--c-border); display: flex; gap: 0; padding: 0 1.5rem; flex-shrink: 0; }
+.nav-tab { padding: 12px 20px; cursor: pointer; font-size: 0.9rem; font-weight: 500; color: var(--c-muted); border-bottom: 2.5px solid transparent; transition: all 0.2s; white-space: nowrap; }
+.nav-tab.active { color: var(--c-accent); border-bottom-color: var(--c-accent); }
+.nav-tab:hover { color: var(--c-text); }
+.nav-tab.admin-only { display: none; }
+
+.content { flex: 1; padding: 1.5rem; overflow-y: auto; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ============ LOBBY ============ */
+.lobby-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: gap; gap: 1rem; }
+.lobby-header h2 { font-size: 1.2rem; font-weight: 600; color: var(--c-navy); }
+.btn-create {
+  background: var(--c-navy); color: white; border: none; border-radius: var(--radius);
+  padding: 9px 18px; font-family: inherit; font-size: 0.9rem; font-weight: 600;
+  cursor: pointer; transition: background 0.2s; display: flex; align-items: center; gap: 6px;
+}
+.btn-create:hover { background: var(--c-blue); }
+.rooms-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+.room-card {
+  background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 14px;
+  padding: 1.25rem; cursor: pointer; transition: all 0.2s; position: relative;
+}
+.room-card:hover { border-color: var(--c-accent); box-shadow: var(--shadow); transform: translateY(-2px); }
+.room-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+.room-card p { font-size: 0.82rem; color: var(--c-muted); margin-bottom: 12px; }
+.room-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.room-meta span { font-size: 0.78rem; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+.status-waiting { background: var(--c-gold-lt); color: #7a5e00; }
+.status-active { background: var(--c-green-lt); color: #007a5e; }
+.status-ended { background: #f0f0f0; color: #666; }
+.room-host { font-size: 0.8rem; color: var(--c-muted); margin-top: 8px; }
+.no-rooms { text-align: center; padding: 3rem; color: var(--c-muted); }
+.no-rooms svg { width: 56px; height: 56px; margin-bottom: 1rem; opacity: 0.3; }
+
+/* ============ MEETING ROOM ============ */
+#meetingPage { background: #0a1628; }
+#meetingPage .topbar { background: rgba(10,22,40,0.95); border-bottom: 1px solid rgba(255,255,255,0.08); }
+.meeting-body { display: flex; flex: 1; overflow: hidden; }
+.video-area { flex: 1; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; }
+.video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.video-tile {
+  background: #1a2a3e; border-radius: 12px; aspect-ratio: 16/9;
+  display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;
+}
+.video-tile video { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
+.video-tile .tile-name {
+  position: absolute; bottom: 8px; left: 10px; background: rgba(0,0,0,0.65);
+  color: white; font-size: 0.78rem; padding: 3px 10px; border-radius: 20px; font-weight: 500;
+}
+.video-tile .tile-muted {
+  position: absolute; top: 8px; right: 8px; background: var(--c-red);
+  color: white; width: 26px; height: 26px; border-radius: 50%;
+  display: none; align-items: center; justify-content: center; font-size: 0.8rem;
+}
+.video-tile.muted .tile-muted { display: flex; }
+.video-tile .avatar-bg {
+  width: 60px; height: 60px; border-radius: 50%; background: var(--c-blue);
+  display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+  color: white; font-weight: 700;
+}
+
+.side-panel {
+  width: 300px; background: #111e2e; border-left: 1px solid rgba(255,255,255,0.07);
+  display: flex; flex-direction: column; flex-shrink: 0;
+}
+.side-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.07); }
+.side-tab {
+  flex: 1; padding: 12px; text-align: center; cursor: pointer; font-size: 0.85rem;
+  color: rgba(255,255,255,0.45); transition: all 0.2s; font-weight: 500;
+  border-bottom: 2px solid transparent;
+}
+.side-tab.active { color: white; border-bottom-color: var(--c-accent); }
+.side-panel-content { flex: 1; overflow-y: auto; }
+.panel-view { display: none; }
+.panel-view.active { display: flex; flex-direction: column; height: 100%; }
+
+/* Participants panel */
+.participant-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
+.participant-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: 8px; transition: background 0.15s; cursor: default;
+}
+.participant-item:hover { background: rgba(255,255,255,0.05); }
+.p-avatar {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--c-blue);
+  display: flex; align-items: center; justify-content: center; color: white;
+  font-weight: 600; font-size: 0.8rem; flex-shrink: 0;
+}
+.p-info { flex: 1; min-width: 0; }
+.p-name { font-size: 0.85rem; color: white; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-role { font-size: 0.72rem; color: rgba(255,255,255,0.45); }
+.p-actions { display: flex; gap: 4px; }
+.p-action-btn {
+  width: 26px; height: 26px; border-radius: 6px; border: none; background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.6); cursor: pointer; font-size: 0.75rem;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.p-action-btn:hover { background: rgba(255,255,255,0.15); color: white; }
+.p-action-btn.danger:hover { background: var(--c-red); }
+
+/* Chat panel */
+.chat-messages { flex: 1; overflow-y: auto; padding: 0.75rem; display: flex; flex-direction: column; gap: 8px; }
+.chat-msg { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 12px; }
+.chat-msg .msg-sender { font-size: 0.75rem; color: var(--c-accent); font-weight: 600; margin-bottom: 3px; }
+.chat-msg .msg-text { font-size: 0.85rem; color: rgba(255,255,255,0.85); line-height: 1.4; }
+.chat-msg .msg-time { font-size: 0.7rem; color: rgba(255,255,255,0.3); margin-top: 4px; }
+.chat-msg.self { background: rgba(46,125,227,0.15); }
+.chat-input-area { padding: 0.75rem; border-top: 1px solid rgba(255,255,255,0.07); }
+.chat-input-wrap { display: flex; gap: 8px; }
+.chat-input-wrap input {
+  flex: 1; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px; padding: 9px 12px; color: white; font-family: inherit; font-size: 0.85rem; outline: none;
+}
+.chat-input-wrap input:focus { border-color: var(--c-accent); }
+.chat-input-wrap input::placeholder { color: rgba(255,255,255,0.3); }
+.chat-input-wrap input:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-send {
+  background: var(--c-accent); color: white; border: none; border-radius: 8px;
+  padding: 9px 14px; cursor: pointer; font-family: inherit; transition: background 0.2s;
+}
+.btn-send:hover { background: #1a6dd0; }
+.chat-disabled-msg { text-align: center; padding: 1rem; color: rgba(255,255,255,0.35); font-size: 0.82rem; }
+
+/* Controls bar */
+.controls-bar {
+  background: #0e1d30; border-top: 1px solid rgba(255,255,255,0.07);
+  padding: 12px 1.5rem; display: flex; align-items: center; justify-content: center; gap: 12px; flex-shrink: 0;
+}
+.ctrl-btn {
+  background: rgba(255,255,255,0.08); border: none; color: rgba(255,255,255,0.8);
+  width: 46px; height: 46px; border-radius: 50%; cursor: pointer; font-size: 1.1rem;
+  display: flex; align-items: center; justify-content: center; transition: all 0.2s; position: relative;
+}
+.ctrl-btn:hover { background: rgba(255,255,255,0.15); }
+.ctrl-btn.off { background: var(--c-red); color: white; }
+.ctrl-btn.danger { background: #c0392b; }
+.ctrl-btn label { font-size: 0.65rem; position: absolute; bottom: -18px; color: rgba(255,255,255,0.4); white-space: nowrap; }
+.host-controls {
+  display: none; background: rgba(255,255,255,0.04); border-radius: 10px;
+  padding: 8px 14px; gap: 8px; align-items: center;
+}
+.host-controls.visible { display: flex; }
+.host-ctrl-btn {
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.7); padding: 6px 14px; border-radius: 6px; font-family: inherit;
+  font-size: 0.8rem; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.host-ctrl-btn:hover { background: rgba(255,255,255,0.12); color: white; }
+.host-ctrl-btn.active { background: var(--c-red); border-color: var(--c-red); color: white; }
+
+/* ============ ADMIN PANEL ============ */
+.admin-section { background: var(--c-surface); border-radius: 14px; border: 1px solid var(--c-border); padding: 1.5rem; margin-bottom: 1.5rem; }
+.admin-section h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1.2rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--c-border); color: var(--c-navy); }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+thead th { padding: 10px 12px; text-align: left; font-weight: 600; color: var(--c-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; background: var(--c-bg); }
+tbody td { padding: 10px 12px; border-top: 1px solid var(--c-border); }
+tbody tr:hover { background: var(--c-bg); }
+.btn-sm { padding: 4px 12px; border-radius: 6px; font-family: inherit; font-size: 0.78rem; cursor: pointer; border: none; font-weight: 500; }
+.btn-sm.edit { background: var(--c-accent-lt); color: var(--c-accent); }
+.btn-sm.del { background: #fff0f0; color: var(--c-red); }
+.btn-sm.toggle-on { background: var(--c-green-lt); color: #007a5e; }
+.btn-sm.toggle-off { background: #fff0f0; color: var(--c-red); }
+
+/* ============ MODAL ============ */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000;
+  display: none; align-items: center; justify-content: center; padding: 1rem;
+}
+.modal-overlay.open { display: flex; }
+.modal-box { background: white; border-radius: 16px; padding: 2rem; width: 100%; max-width: 440px; box-shadow: var(--shadow-lg); }
+.modal-box h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.5rem; color: var(--c-navy); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem; }
+.btn-secondary { padding: 9px 20px; border: 1.5px solid var(--c-border); border-radius: var(--radius); background: white; font-family: inherit; font-size: 0.9rem; cursor: pointer; }
+.btn-secondary:hover { background: var(--c-bg); }
+
+/* ============ TOAST ============ */
+#toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--c-navy); color: white; padding: 10px 20px; border-radius: 30px; font-size: 0.875rem; font-weight: 500; z-index: 9999; transition: transform 0.3s; pointer-events: none; }
+#toast.show { transform: translateX(-50%) translateY(0); }
+#toast.error { background: var(--c-red); }
+
+/* ============ RESPONSIVE ============ */
+@media (max-width: 768px) {
+  .side-panel { display: none; }
+  .side-panel.mobile-open { display: flex; position: fixed; right: 0; top: 56px; bottom: 0; z-index: 200; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== TOAST ===== -->
+<div id="toast"></div>
+
+<!-- ===== LOGIN PAGE ===== -->
+<div id="loginPage" class="page active">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="emblem">🏛</div>
+      <h1>ระบบประชุมออนไลน์<br>เทศบาลตำบลบ้านยาง</h1>
+      <p>สำหรับเจ้าหน้าที่เทศบาลเท่านั้น</p>
+    </div>
+    <div class="form-group">
+      <label>ชื่อผู้ใช้ (Username)</label>
+      <input type="text" id="loginUsername" placeholder="กรอก username" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>รหัสผ่าน (Password)</label>
+      <input type="password" id="loginPassword" placeholder="กรอก password" autocomplete="current-password">
+    </div>
+    <button class="btn-primary" id="loginBtn" onclick="doLogin()">เข้าสู่ระบบ</button>
+    <div class="error-msg" id="loginError"></div>
+  </div>
+</div>
+
+<!-- ===== MAIN PAGE ===== -->
+<div id="mainPage" class="page">
+  <div class="topbar">
+    <div class="topbar-logo">🏛 เทศบาลตำบลบ้านยาง</div>
+    <div class="topbar-user">
+      <div class="avatar" id="topbarAvatar">?</div>
+      <span id="topbarName">—</span>
+      <span class="role-badge" id="topbarRole">—</span>
+      <button class="btn-logout" onclick="doLogout()">ออกจากระบบ</button>
+    </div>
+  </div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" onclick="switchTab('lobby')">📋 ห้องประชุม</div>
+    <div class="nav-tab admin-only" id="adminTab" onclick="switchTab('admin')">⚙️ จัดการระบบ</div>
+  </div>
+  <div class="content">
+    <!-- LOBBY TAB -->
+    <div class="tab-content active" id="tab-lobby">
+      <div class="lobby-header">
+        <h2>ห้องประชุมทั้งหมด</h2>
+        <button class="btn-create" id="createRoomBtn" onclick="openCreateRoom()" style="display:none">
+          ➕ สร้างห้องใหม่
+        </button>
+      </div>
+      <div class="rooms-grid" id="roomsGrid">
+        <div class="no-rooms"><p>กำลังโหลด...</p></div>
+      </div>
+    </div>
+    <!-- ADMIN TAB -->
+    <div class="tab-content" id="tab-admin">
+      <div class="admin-section">
+        <h3>จัดการพนักงาน</h3>
+        <div style="margin-bottom:1rem"><button class="btn-create" onclick="openAddUser()">➕ เพิ่มพนักงาน</button></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ชื่อ-นามสกุล</th><th>Username</th><th>แผนก</th><th>บทบาท</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+            <tbody id="usersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="admin-section">
+        <h3>ประวัติการประชุม (Log)</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ห้อง</th><th>ชื่อ</th><th>เข้าร่วม</th><th>ออกจากห้อง</th></tr></thead>
+            <tbody id="logsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MEETING PAGE ===== -->
+<div id="meetingPage" class="page">
+  <div class="topbar">
+    <div class="topbar-logo" id="meetRoomName">ห้องประชุม</div>
+    <div class="topbar-user">
+      <span id="meetUserName" style="font-size:0.85rem;color:rgba(255,255,255,0.7)">—</span>
+      <button class="btn-logout" onclick="leaveRoom()" style="background:rgba(214,48,49,0.2);border-color:rgba(214,48,49,0.5);color:#ff7675">
+        🚪 ออกจากห้อง
+      </button>
+    </div>
+  </div>
+  <div class="meeting-body">
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div class="video-area" id="videoArea">
+        <div class="video-grid" id="videoGrid"></div>
+      </div>
+      <div class="controls-bar">
+        <div style="position:relative">
+          <button class="ctrl-btn" id="micBtn" onclick="toggleMic()" title="ไมค์">🎤<label>ไมค์</label></button>
+        </div>
+        <div style="position:relative">
+          <button class="ctrl-btn" id="camBtn" onclick="toggleCam()" title="กล้อง">📷<label>กล้อง</label></button>
+        </div>
+        <div style="position:relative">
+          <button class="ctrl-btn" id="chatToggleBtn" onclick="toggleSidePanel('chat')" title="แชท">💬<label>แชท</label></button>
+        </div>
+        <div style="position:relative">
+          <button class="ctrl-btn" id="participantsBtn" onclick="toggleSidePanel('participants')" title="ผู้เข้าร่วม">👥<label>ผู้เข้าร่วม</label></button>
+        </div>
+        <div class="host-controls" id="hostControls">
+          <span style="font-size:0.75rem;color:rgba(255,255,255,0.4)">Host:</span>
+          <button class="host-ctrl-btn" id="muteAllBtn" onclick="toggleMuteAll()">🔇 ปิดไมค์ทั้งหมด</button>
+          <button class="host-ctrl-btn" id="chatLockBtn" onclick="toggleChatLock()">🔒 ล็อกแชท</button>
+        </div>
+      </div>
+    </div>
+    <div class="side-panel" id="sidePanel">
+      <div class="side-tabs">
+        <div class="side-tab active" onclick="switchSideTab('chat')">💬 แชท</div>
+        <div class="side-tab" onclick="switchSideTab('participants')">👥 ผู้เข้าร่วม</div>
+      </div>
+      <div class="side-panel-content">
+        <!-- CHAT PANEL -->
+        <div class="panel-view active" id="panelChat" style="display:flex;flex-direction:column;height:100%">
+          <div class="chat-messages" id="chatMessages"></div>
+          <div class="chat-disabled-msg" id="chatDisabledMsg" style="display:none">🔒 แชทถูกปิดโดยผู้ดูแล</div>
+          <div class="chat-input-area">
+            <div class="chat-input-wrap">
+              <input type="text" id="chatInput" placeholder="พิมพ์ข้อความ..." onkeydown="if(event.key==='Enter')sendChat()">
+              <button class="btn-send" onclick="sendChat()">➤</button>
+            </div>
+          </div>
+        </div>
+        <!-- PARTICIPANTS PANEL -->
+        <div class="panel-view" id="panelParticipants">
+          <div class="participant-list" id="participantList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODALS ===== -->
+<div class="modal-overlay" id="createRoomModal">
+  <div class="modal-box">
+    <h2>🏢 สร้างห้องประชุมใหม่</h2>
+    <div class="form-group"><label>ชื่อห้องประชุม</label><input type="text" id="newRoomName" placeholder="เช่น ประชุมสภา ครั้งที่ 1"></div>
+    <div class="form-group"><label>คำอธิบาย (ไม่บังคับ)</label><input type="text" id="newRoomDesc" placeholder="รายละเอียดเพิ่มเติม"></div>
+    <div class="form-group"><label>จำนวนผู้เข้าร่วมสูงสุด</label><input type="number" id="newRoomMax" value="50" min="2" max="100"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('createRoomModal')">ยกเลิก</button>
+      <button class="btn-primary" style="width:auto;padding:9px 24px" onclick="createRoom()">สร้างห้อง</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="addUserModal">
+  <div class="modal-box">
+    <h2>➕ เพิ่มพนักงาน</h2>
+    <div class="form-group"><label>ชื่อ-นามสกุล</label><input type="text" id="newUserFullname" placeholder="ชื่อ นามสกุล"></div>
+    <div class="form-group"><label>Username</label><input type="text" id="newUserUsername" placeholder="ชื่อผู้ใช้"></div>
+    <div class="form-group"><label>แผนก</label><input type="text" id="newUserDept" placeholder="เช่น สำนักปลัด"></div>
+    <div class="form-group"><label>บทบาท</label>
+      <select id="newUserRole" style="width:100%;padding:11px 14px;border:1.5px solid var(--c-border);border-radius:var(--radius);font-family:inherit;font-size:0.95rem">
+        <option value="member">Member — สมาชิกทั่วไป</option>
+        <option value="host">Host — เจ้าของห้อง</option>
+        <option value="admin">Admin — ผู้ดูแลระบบ</option>
+        <option value="superadmin">SuperAdmin</option>
+      </select>
+    </div>
+    <div class="form-group"><label>รหัสผ่าน</label><input type="password" id="newUserPassword" placeholder="ตั้งรหัสผ่าน"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('addUserModal')">ยกเลิก</button>
+      <button class="btn-primary" style="width:auto;padding:9px 24px" onclick="createUser()">เพิ่มพนักงาน</button>
+    </div>
+  </div>
+</div>
+
+<script src="meeting.js"></script>
+</body>
+</html>
