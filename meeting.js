@@ -4,7 +4,7 @@
 // ============================================================
 
 // *** ตั้งค่าก่อนใช้งาน ***
-const API_URL = 'https://script.google.com/a/~/macros/s/AKfycbxF95M6qHJZlhk7DKrlaPhMsNPKqDrXUuOgGLE-Ltw3S_YXMAEo6YSht1oHSWYNhRbj/exec'; // ใส่ URL ของ Apps Script ที่ Publish เป็น Web App แล้ว
+const API_URL = 'https://script.google.com/a/~/macros/s/AKfycbxF95M6qHJZlhk7DKrlaPhMsNPKqDrXUuOgGLE-Ltw3S_YXMAEo6YSht1oHSWYNhRbj/exec'; // ใส่ URL ของ Apps Script
 
 // ============================================================
 // STATE
@@ -17,6 +17,7 @@ let micEnabled = true;
 let camEnabled = true;
 let peer = null;
 let peers = {}; // { peerId: { call, stream, userId, username } }
+let activePeersInRoom = new Set(); // บันทึก Remote Peer IDs ในห้องประชุมปัจจุบันเพื่อช่วยเช็คการหลุด
 let pollInterval = null;
 let chatPollInterval = null;
 let lastChatTime = null;
@@ -103,8 +104,7 @@ async function doRegister() {
     });
 
     if (res.success) {
-      showToast('สมัครสมาชิกสำเร็จแล้ว! รอผู้ดูแลระบบอนุมัติบัญชีใช้งาน');
-      // ล้างค่าช่องป้อนข้อมูล
+      showToast('สมัครสมาชิกสำเร็จแล้ว! รอ SuperAdmin อนุมัติบัญชีใช้งาน');
       document.getElementById('regFullname').value = '';
       document.getElementById('regUsername').value = '';
       document.getElementById('regDept').value = '';
@@ -131,6 +131,58 @@ function doLogout() {
 }
 
 // ============================================================
+// PROFILE MANAGEMENT (จัดการข้อมูลของตนเอง)
+// ============================================================
+function openSelfProfile() {
+  document.getElementById('myFullname').value = currentUser.fullname || '';
+  document.getElementById('myDept').value = currentUser.department || '';
+  document.getElementById('myOldPassword').value = '';
+  document.getElementById('myNewPassword').value = '';
+  openModal('profileModal');
+}
+
+async function saveSelfProfile() {
+  const fullname = document.getElementById('myFullname').value.trim();
+  const department = document.getElementById('myDept').value.trim();
+  const oldPassword = document.getElementById('myOldPassword').value;
+  const newPassword = document.getElementById('myNewPassword').value;
+
+  if (!fullname) { showToast('กรุณากรอกชื่อ-นามสกุล', true); return; }
+  if (!oldPassword) { showToast('กรุณากรอกรหัสผ่านเดิมเพื่อบันทึกข้อมูล', true); return; }
+
+  const body = {
+    action: 'updateSelfProfile',
+    fullname,
+    department,
+    old_password: oldPassword
+  };
+
+  if (newPassword) {
+    if (newPassword.length < 6) {
+      showToast('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 หลัก', true);
+      return;
+    }
+    body.new_password = newPassword;
+  }
+
+  try {
+    const res = await apiCall(body);
+    if (res.success) {
+      currentUser.fullname = fullname;
+      currentUser.department = department;
+      sessionStorage.setItem('mun_auth', JSON.stringify({ token: authToken, user: currentUser }));
+      showMainPage();
+      closeModal('profileModal');
+      showToast('แก้ไขข้อมูลส่วนตัวสำเร็จแล้ว ✅');
+    } else {
+      showToast(res.error || 'แก้ไขข้อมูลล้มเหลว', true);
+    }
+  } catch (e) {
+    showToast('เกิดข้อผิดพลาดเชื่อมต่อเซิร์ฟเวอร์', true);
+  }
+}
+
+// ============================================================
 // PAGES
 // ============================================================
 function showPage(id) {
@@ -146,11 +198,11 @@ function showMainPage() {
   const rb = document.getElementById('topbarRole');
   rb.textContent = roleLabel(u.role); rb.className = 'role-badge ' + u.role;
   
-  // แสดง admin tab ถ้ามีสิทธิ์
-  const canAdmin = ['superadmin', 'admin'].includes(u.role);
-  document.querySelectorAll('.admin-only').forEach(el => el.style.display = canAdmin ? '' : 'none');
+  // แผงควบคุม "ระบบอนุมัติ" และ "แท็บจัดการระบบ" จำกัดให้เฉพาะ SuperAdmin เท่านั้นเห็น!
+  const isSuperAdmin = u.role === 'superadmin';
+  document.querySelectorAll('.admin-only').forEach(el => el.style.display = isSuperAdmin ? '' : 'none');
   
-  // แสดงปุ่มสร้างห้องถ้ามีสิทธิ์
+  // แสดงปุ่มสร้างห้องหากเป็น SuperAdmin, Admin หรือ Host
   const canCreate = ['superadmin', 'admin', 'host'].includes(u.role);
   document.getElementById('createRoomBtn').style.display = canCreate ? '' : 'none';
   loadRooms();
@@ -181,6 +233,7 @@ async function loadRooms() {
       return;
     }
     
+    // สิทธิ์ลบห้องประชุมให้เฉพาะ SuperAdmin และ Admin เท่านั้น
     const canDelete = ['superadmin', 'admin'].includes(currentUser.role);
     
     grid.innerHTML = res.rooms.map(r => {
@@ -242,28 +295,35 @@ async function joinRoom(roomId, roomName) {
   document.getElementById('meetRoomName').textContent = '🏛 ' + roomName;
   document.getElementById('meetUserName').textContent = currentUser.fullname || currentUser.username;
   
-  // ล้างค่าแชทเดิมใน Client
   displayedMsgIds.clear();
   document.getElementById('chatMessages').innerHTML = '';
 
-  // ขอ media stream ด้วยโครงสร้างที่เสถียรที่สุด
+  // ขอ Media Stream (กล้อง + ไมค์) พร้อมตั้งคุณภาพเสียงสูงสุด
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 24 } },
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
     camEnabled = true;
     micEnabled = true;
   } catch (e) {
-    console.warn('ไม่สามารถเข้าถึงกล้องและไมค์ได้ (Video & Audio Fail):', e);
+    console.warn('ไม่สามารถรับสัญญาณภาพความละเอียดสูงได้ ปรับลดระดับ:', e);
     try {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-      camEnabled = false;
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      camEnabled = true;
       micEnabled = true;
-      showToast('พบข้อผิดพลาดของกล้อง — ใช้ระบบเสียงอย่างเดียว');
     } catch (e2) {
-      console.warn('ไม่สามารถเข้าถึงไมค์ได้:', e2);
-      localStream = null;
-      camEnabled = false;
-      micEnabled = false;
-      showToast('ไม่พบอุปกรณ์กล้องและไมโครโฟน');
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        camEnabled = false;
+        micEnabled = true;
+        showToast('ไม่พบกล้องเชื่อมต่อ — เข้าร่วมด้วยระบบเสียงอย่างเดียว');
+      } catch (e3) {
+        localStream = null;
+        camEnabled = false;
+        micEnabled = false;
+        showToast('ไม่พบอุปกรณ์รับส่งไมค์และกล้อง');
+      }
     }
   }
 
@@ -284,6 +344,7 @@ async function leaveRoom() {
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   Object.keys(peers).forEach(id => { if (peers[id].call) peers[id].call.close(); });
   peers = {};
+  activePeersInRoom.clear();
   if (currentRoomId) await apiCall({ action: 'leaveRoom', room_id: currentRoomId });
   currentRoomId = null;
   document.getElementById('videoGrid').innerHTML = '';
@@ -295,7 +356,7 @@ async function leaveRoom() {
 }
 
 // ============================================================
-// PEERJS (WebRTC)
+// PEERJS (WebRTC Integration - ค้นหาและโทรเชื่อมต่อแบบอัตโนมัติ)
 // ============================================================
 function initPeerJS() {
   if (!window.Peer) {
@@ -307,9 +368,24 @@ function initPeerJS() {
 }
 
 function setupPeer() {
-  const peerId = 'mun_' + currentRoomId + '_' + currentUser.user_id + '_' + Date.now();
-  peer = new Peer(peerId, { debug: 0 });
-  peer.on('open', id => { console.log('PeerJS connected:', id); });
+  // สร้าง Peer ID ที่ระบุโครงสร้างผู้ใช้อย่างถูกต้องเพื่อความปลอดภัยสูงสุด
+  const peerId = 'mun_' + currentRoomId + '_' + currentUser.user_id;
+  
+  peer = new Peer(peerId, { 
+    debug: 1,
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    }
+  });
+
+  peer.on('open', id => { 
+    console.log('PeerJS เปิดเชื่อมต่อสำเร็จ:', id); 
+  });
+
+  // รับสายโทรเข้าจากผู้ใช้ท่านอื่นที่พึ่งออนไลน์เข้ามา
   peer.on('call', call => {
     call.answer(localStream);
     call.on('stream', remoteStream => {
@@ -318,29 +394,39 @@ function setupPeer() {
       peers[call.peer] = { call, stream: remoteStream, userId: meta.userId, username: meta.fullname };
     });
     call.on('close', () => removeRemoteTile(call.peer));
+    call.on('error', () => removeRemoteTile(call.peer));
   });
-  peer.on('error', err => console.warn('PeerJS error:', err));
+
+  peer.on('error', err => {
+    console.warn('ระบบ PeerJS ค้นหาสัญญาณขัดข้อง:', err);
+  });
 }
 
+// ฟังก์ชันโทรหาผู้ใช้รายอื่นในห้องที่เข้ามาใหม่
 function connectToPeer(remotePeerId, remoteUserId, remoteFullname) {
-  if (!peer || peers[remotePeerId]) return;
+  if (!peer || peer.destroyed || peers[remotePeerId]) return;
+  
+  console.log('กำลังโทรเชื่อมต่อสัญญาณวิดีโอ/เสียงไปที่:', remoteFullname);
+  
   const call = peer.call(remotePeerId, localStream, {
     metadata: { fullname: currentUser.fullname, userId: currentUser.user_id }
   });
+
+  if (!call) return;
+
   call.on('stream', remoteStream => {
     addRemoteTile(remotePeerId, remoteStream, remoteFullname, remoteUserId);
     peers[remotePeerId] = { call, stream: remoteStream, userId: remoteUserId, username: remoteFullname };
   });
   call.on('close', () => removeRemoteTile(remotePeerId));
+  call.on('error', () => removeRemoteTile(remotePeerId));
 }
 
 // ============================================================
-// VIDEO TILES (แก้ไขบัคตัวแปร HTML โดนเปลี่ยน)
+// VIDEO TILES
 // ============================================================
 function renderSelfTile() {
   const grid = document.getElementById('videoGrid');
-  
-  // ลบ Self Tile เก่าออกถ้ามีอยู่
   const existingTile = document.getElementById('tile-self');
   if (existingTile) existingTile.remove();
 
@@ -348,7 +434,6 @@ function renderSelfTile() {
   tile.className = 'video-tile';
   tile.id = 'tile-self';
 
-  // ตรวจสอบสถานะการเชื่อมต่อกล้อง
   if (localStream && localStream.getVideoTracks().length > 0 && camEnabled) {
     const video = document.createElement('video');
     video.autoplay = true; 
@@ -363,7 +448,6 @@ function renderSelfTile() {
     tile.appendChild(av);
   }
 
-  // สร้าง UI สำหรับชื่อ และไอคอนปิดเสียง โดยใช้ appendChild เพื่อรักษา Element ไว้
   const infoName = document.createElement('div');
   infoName.className = 'tile-name';
   infoName.textContent = `👤 ${currentUser.fullname || currentUser.username} (คุณ)`;
@@ -374,24 +458,28 @@ function renderSelfTile() {
 
   tile.appendChild(infoName);
   tile.appendChild(iconMuted);
-  
   grid.appendChild(tile);
   
-  // ซิงค์ปุ่ม UI ให้ตรงกับสถานะจริง
   updateControlsButtonUI();
 }
 
 function addRemoteTile(peerId, stream, name, userId) {
   const existingTile = document.getElementById('tile-' + peerId);
-  if (existingTile) return;
+  if (existingTile) {
+    // ป้องกันการแฮงค์ของวิดีโอ อัปเดตสตรีมเมื่อตรวจพบความต่าง
+    const videoEl = existingTile.querySelector('video');
+    if (videoEl && videoEl.srcObject !== stream) {
+      videoEl.srcObject = stream;
+    }
+    return;
+  }
 
   const grid = document.getElementById('videoGrid');
   const tile = document.createElement('div');
-  tile.className = 'video-tile'; 
+  tile.className = 'video-tile remote'; 
   tile.id = 'tile-' + peerId;
   tile.setAttribute('data-user-id', userId || '');
 
-  // ดึง track วิดีโอของรีโมท
   if (stream && stream.getVideoTracks().length > 0) {
     const video = document.createElement('video');
     video.autoplay = true; 
@@ -438,8 +526,6 @@ function toggleCam() {
   if (!localStream) return;
   camEnabled = !camEnabled;
   localStream.getVideoTracks().forEach(t => t.enabled = camEnabled);
-  
-  // ทำการ Render กล้องตัวเองใหม่เพื่อให้ตัว Video สลับสถานะกล้องได้สมบูรณ์
   renderSelfTile();
 }
 
@@ -474,7 +560,7 @@ function switchSideTab(tab) {
 }
 
 // ============================================================
-// CHAT (แก้แชทซ้ำ + คลีนชื่อภาษาไทย)
+// CHAT
 // ============================================================
 async function sendChat() {
   const input = document.getElementById('chatInput');
@@ -482,7 +568,6 @@ async function sendChat() {
   if (!msg || !currentRoomId) return;
   if (roomControls.chat_disabled) { showToast('แชทถูกปิดโดยผู้ดูแล', true); return; }
   
-  // ปิดการป้อนข้อมูลชั่วคราว ป้องกันการกดซ้ำซ้อน
   input.disabled = true;
   const res = await apiCall({ action: 'sendChat', room_id: currentRoomId, message: msg });
   input.disabled = false;
@@ -490,7 +575,6 @@ async function sendChat() {
 
   if (res.success) {
     input.value = '';
-    // นำเข้าข้อมูลระบบตรวจสอบ ID ป้องกันซ้ำ
     const uniqueMsgId = res.msg_id;
     appendChatMessage({ 
       msg_id: uniqueMsgId,
@@ -499,7 +583,6 @@ async function sendChat() {
       message: msg, 
       timestamp: res.timestamp 
     }, true);
-    
     lastChatTime = res.timestamp;
   } else { 
     showToast(res.error || 'ส่งแชทไม่สำเร็จ', true); 
@@ -511,25 +594,21 @@ async function loadChatHistory() {
   const res = await apiCall({ action: 'getChatHistory', room_id: currentRoomId, since: lastChatTime || '' });
   if (res.success && res.messages.length) {
     res.messages.forEach(m => {
-      // คัดกรองข้อความระบบ และป้องกันการแสดงซ้ำจาก Client ID Verification
       if (!m.msg_id.startsWith('sys_') && !displayedMsgIds.has(m.msg_id)) {
         appendChatMessage(m, m.user_id === currentUser.user_id);
       }
     });
-    // ตั้งเวลาสำหรับใช้ในการ Query รอบต่อไป
     lastChatTime = res.messages[res.messages.length - 1].timestamp;
   }
 }
 
 function appendChatMessage(msg, isSelf) {
-  if (displayedMsgIds.has(msg.msg_id)) return; // ตรวจสอบความปลอดภัยกันแชทซ้ำ
+  if (displayedMsgIds.has(msg.msg_id)) return;
   displayedMsgIds.add(msg.msg_id);
 
   const el = document.createElement('div');
   el.className = 'chat-msg' + (isSelf ? ' self' : '');
   const t = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '';
-  
-  // ตรวจสอบชื่อคนส่ง เพื่อป้องกัน "??????" จากตัวแปร
   const senderName = msg.fullname || msg.username || 'ผู้เข้าร่วม';
   
   el.innerHTML = `
@@ -593,7 +672,7 @@ function updateChatUI() {
 }
 
 // ============================================================
-// POLLING (refresh state ทุก 3 วินาที)
+// POLLING (คอยสแกน Peer ที่เข้ามาใหม่ และซิงค์เชื่อมวิดีโออัตโนมัติ)
 // ============================================================
 function startPolling() {
   pollInterval = setInterval(refreshRoomState, 3000);
@@ -613,7 +692,7 @@ async function refreshRoomState() {
     roomControls = res.controls || roomControls;
     updateChatUI();
 
-    // ตรวจสอบว่าตนเองถูกเตะหรือไม่ (Kicked)
+    // เช็คกรณีโดนดีด (Kicked)
     const self = (res.participants || []).find(p => p.user_id === currentUser.user_id);
     if (self && (self.is_kicked === true || self.is_kicked === 'TRUE')) {
       stopPolling();
@@ -622,18 +701,45 @@ async function refreshRoomState() {
       return;
     }
 
-    // ตรวจสอบการโดน Muted โดย Host
+    // ดีเทลจัดการปิดไมค์รายห้อง/รายคน
     if ((roomControls.all_muted || (self && (self.is_muted === true || self.is_muted === 'TRUE'))) && micEnabled) {
-      if (localStream) {
-        localStream.getAudioTracks().forEach(t => t.enabled = false);
-      }
+      if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = false);
       micEnabled = false;
       updateControlsButtonUI();
       showToast('คุณถูกปิดไมโครโฟนโดยผู้ดูแลระบบ', true);
     }
 
+    // บริหารจัดการ WebRTC เชื่อมต่อสมาชิกที่ออนไลน์แบบอัตโนมัติ (Auto-Call)
+    const activeParticipants = (res.participants || []).filter(p => p.is_active === true || p.is_active === 'TRUE');
+    
+    activeParticipants.forEach(p => {
+      if (p.user_id !== currentUser.user_id) {
+        const expectedPeerId = 'mun_' + currentRoomId + '_' + p.user_id;
+        
+        // หากผู้ใช้นี้ยังไม่มีการโทรเชื่อมต่อสัญญาณ ให้ยิง Call ทันที
+        if (!peers[expectedPeerId] && peer && !peer.destroyed) {
+          connectToPeer(expectedPeerId, p.user_id, p.fullname || p.username);
+        }
+      }
+    });
+
+    // กำจัด Remote Video Tile ของผู้ใช้ที่ออกจากห้องไปแล้วออกจากหน้าจอ
+    const activeUserIds = new Set(activeParticipants.map(p => p.user_id));
+    document.querySelectorAll('.video-tile.remote').forEach(tile => {
+      const uId = tile.getAttribute('data-user-id');
+      if (uId && !activeUserIds.has(uId)) {
+        tile.remove();
+        // ล้างหน่วยความจำ Peer
+        const matchedPeerId = Object.keys(peers).find(k => peers[k].userId === uId);
+        if (matchedPeerId) {
+          if (peers[matchedPeerId].call) peers[matchedPeerId].call.close();
+          delete peers[matchedPeerId];
+        }
+      }
+    });
+
     renderParticipants(res.participants || []);
-  } catch (e) { /* silent fail */ }
+  } catch (e) { console.error('ระบบซิงค์ขัดข้อง:', e); }
 }
 
 function renderParticipants(participants) {
@@ -657,17 +763,17 @@ function renderParticipants(participants) {
 }
 
 // ============================================================
-// ADMIN - USERS MANAGEMENT & APPROVAL SYSTEM
+// ADMIN - USERS MANAGEMENT & APPROVAL SYSTEM (SuperAdmin จำกัดสิทธิ์)
 // ============================================================
 async function loadUsers() {
   const res = await apiCall({ action: 'getUsers' });
   if (!res.success) return;
   
-  // 1. แยกรายชื่อที่ "รออนุมัติ" (is_active เป็น "PENDING")
+  // 1. แยกรายชื่อที่สมัครเข้ามาใหม่ "รออนุมัติ" (is_active เป็น "PENDING")
   const pendingUsers = res.users.filter(u => u.is_active === 'PENDING' || u.is_active === 'pending');
   const activeAndSuspendedUsers = res.users.filter(u => u.is_active !== 'PENDING' && u.is_active !== 'pending');
   
-  // แสดงตัวเลข Badge รายการรออนุมัติ
+  // แสดงจำนวนคำขอบน Badge แถบอนุมัติ
   const badge = document.getElementById('pendingUsersCount');
   if (pendingUsers.length > 0) {
     badge.textContent = pendingUsers.length;
@@ -676,7 +782,7 @@ async function loadUsers() {
     badge.style.display = 'none';
   }
 
-  // เรนเดอร์ตารางรออนุมัติ
+  // เรนเดอร์ตารางรออนุมัติ (SuperAdmin เท่านั้นที่มีสิทธิ์จัดการ)
   const pendingTbody = document.getElementById('pendingUsersTableBody');
   if (pendingUsers.length === 0) {
     pendingTbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--c-muted);padding:1.5rem">ไม่มีรายการขอสมัครสมาชิกใหม่</td></tr>`;
@@ -700,12 +806,18 @@ async function loadUsers() {
   const tbody = document.getElementById('usersTableBody');
   tbody.innerHTML = activeAndSuspendedUsers.map(u => {
     const isActive = u.is_active === true || u.is_active === 'TRUE';
-    let statusHTML = '';
-    if (isActive) {
-      statusHTML = `<span class="status-badge active">✅ ใช้งานได้</span>`;
-    } else {
-      statusHTML = `<span class="status-badge suspended">❌ ระงับใช้งาน</span>`;
-    }
+    let statusHTML = isActive ? 
+      `<span class="status-badge active">✅ ใช้งานได้</span>` : 
+      `<span class="status-badge suspended">❌ ระงับใช้งาน</span>`;
+
+    // เพิ่มฟังก์ชันคลิกดูรหัสผ่านจริงของผู้ใช้กันลืม (ดึง plain_password จาก Google Sheet)
+    const plainPasswordText = u.plain_password ? escHtml(u.plain_password) : 'ไม่ระบุ';
+    const passwordUI = `
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="pwd-mask" id="pwd-text-${u.user_id}" style="font-family:monospace;background:#f0f4ff;padding:2px 6px;border-radius:4px;">******</span>
+        <button class="btn-sm" onclick="togglePasswordVisibility('${u.user_id}', '${plainPasswordText}')" style="padding:2px 6px;font-size:0.75rem;">👁️ ดู</button>
+      </div>
+    `;
 
     return `
       <tr>
@@ -713,23 +825,34 @@ async function loadUsers() {
         <td><code style="background:#f0f4ff;padding:2px 6px;border-radius:4px;font-size:0.82rem">${escHtml(u.username)}</code></td>
         <td>${escHtml(u.department || '—')}</td>
         <td><span class="role-badge ${u.role}" style="display:inline-block">${roleLabel(u.role)}</span></td>
+        <td>${passwordUI}</td>
         <td>${statusHTML}</td>
         <td>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <button class="btn-sm edit" onclick="openEditUser('${u.user_id}', '${escHtml(u.fullname)}', '${escHtml(u.department)}', '${u.role}')">⚙️ แก้ไข/รหัสผ่าน</button>
+            <button class="btn-sm edit" onclick="openEditUser('${u.user_id}', '${escHtml(u.fullname)}', '${escHtml(u.department)}', '${u.role}')">⚙️ แก้ไขข้อมูล/รหัส</button>
             <button class="btn-sm ${isActive ? 'toggle-off' : 'toggle-on'}"
               onclick="toggleUserActive('${u.user_id}',${!isActive})">
               ${isActive ? 'ระงับใช้งาน' : 'เปิดใช้งาน'}
             </button>
-            ${currentUser.role === 'superadmin' ? `<button class="btn-sm del" onclick="deleteUserPermanent('${u.user_id}', '${escHtml(u.fullname)}')">🗑️ ลบถาวร</button>` : ''}
+            <button class="btn-sm del" onclick="deleteUserPermanent('${u.user_id}', '${escHtml(u.fullname)}')">🗑️ ลบถาวร</button>
           </div>
         </td>
       </tr>`;
   }).join('');
 }
 
+// ฟังก์ชันเปิด/ปิด การมองเห็นรหัสผ่านพนักงาน
+function togglePasswordVisibility(userId, plainPassword) {
+  const pwdEl = document.getElementById(`pwd-text-${userId}`);
+  if (pwdEl.textContent === '******') {
+    pwdEl.textContent = plainPassword;
+  } else {
+    pwdEl.textContent = '******';
+  }
+}
+
 async function approveUser(userId, isApprove) {
-  const actionText = isApprove ? 'อนุมัติผู้ใช้งานรายนี้' : 'ปฏิเสธและลบคำขอนี้ออก';
+  const actionText = isApprove ? 'อนุมัติพนักงานรายนี้เข้าใช้งาน' : 'ปฏิเสธและลบคำขอออกจากระบบ';
   if (!confirm(`คุณต้องการที่จะ "${actionText}" ใช่หรือไม่?`)) return;
   
   try {
@@ -740,10 +863,10 @@ async function approveUser(userId, isApprove) {
     });
     
     if (res.success) {
-      showToast('ดำเนินการเรียบร้อยแล้ว');
+      showToast('ดำเนินการอนุมัติสำเร็จ ✅');
       loadUsers();
     } else {
-      showToast(res.error || 'เกิดข้อผิดพลาดในการอนุมัติ', true);
+      showToast(res.error || 'เกิดข้อผิดพลาดในการบันทึกสิทธิ์', true);
     }
   } catch (e) {
     showToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', true);
@@ -752,17 +875,16 @@ async function approveUser(userId, isApprove) {
 
 async function toggleUserActive(userId, newStatus) {
   const res = await apiCall({ action: 'updateUser', user_id: userId, is_active: newStatus });
-  if (res.success) { showToast('อัปเดตสถานะสำเร็จ'); loadUsers(); }
+  if (res.success) { showToast('อัปเดตสิทธิ์ใช้งานพนักงานเรียบร้อย'); loadUsers(); }
   else showToast(res.error, true);
 }
 
-// ระบบจัดการรายละเอียดและแก้ไขรหัสผ่านพนักงาน
 function openEditUser(userId, fullname, department, role) {
   document.getElementById('editUserId').value = userId;
   document.getElementById('editUserFullname').value = fullname;
   document.getElementById('editUserDept').value = department === '—' ? '' : department;
   document.getElementById('editUserRole').value = role;
-  document.getElementById('editUserPassword').value = ''; // ปล่อยว่างไว้เสมอเวลาเปิด
+  document.getElementById('editUserPassword').value = '';
   openModal('editUserModal');
 }
 
@@ -795,7 +917,7 @@ async function saveEditUser() {
     const res = await apiCall(body);
     if (res.success) {
       closeModal('editUserModal');
-      showToast('แก้ไขข้อมูลพนักงานและบันทึกเรียบร้อย ✅');
+      showToast('แก้ไขข้อมูลและบันทึกรหัสผ่านใหม่เรียบร้อย ✅');
       loadUsers();
     } else {
       showToast(res.error || 'ไม่สามารถแก้ไขข้อมูลได้', true);
@@ -806,17 +928,17 @@ async function saveEditUser() {
 }
 
 async function deleteUserPermanent(userId, fullname) {
-  if (!confirm(`⚠️ คำเตือน: คุณแน่ใจที่จะ "ลบถาวร" บัญชีของ "${fullname}" หรือไม่? ข้อมูลจะไม่สามารถกู้คืนได้`)) return;
+  if (!confirm(`⚠️ คำเตือนระบบ: คุณแน่ใจที่จะลบข้อมูลของ "${fullname}" ออกจากฐานข้อมูลถาวรหรือไม่? การกระทำนี้ไม่สามารถย้อนคืนได้`)) return;
   try {
     const res = await apiCall({ action: 'deleteUser', user_id: userId });
     if (res.success) {
-      showToast('ลบผู้ใช้ถาวรเรียบร้อย');
+      showToast('ลบประวัติพนักงานเสร็จสิ้น ✅');
       loadUsers();
     } else {
-      showToast(res.error || 'ลบไม่สำเร็จ', true);
+      showToast(res.error || 'ลบข้อมูลล้มเหลว', true);
     }
   } catch (e) {
-    showToast('เกิดข้อผิดพลาดฝั่งเซิร์ฟเวอร์', true);
+    showToast('เชื่อมต่อฝั่งเซิร์ฟเวอร์ขัดข้อง', true);
   }
 }
 
