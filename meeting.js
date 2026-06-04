@@ -43,6 +43,19 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================
+// GLOBAL LOADER (ระบบหมุนกันผู้ใช้กดปุ่มซ้ำซ้อน)
+// ============================================================
+function showLoader() {
+  const loader = document.getElementById('loadingOverlay');
+  if (loader) loader.style.display = 'flex';
+}
+
+function hideLoader() {
+  const loader = document.getElementById('loadingOverlay');
+  if (loader) loader.style.display = 'none';
+}
+
+// ============================================================
 // AUTH & REGISTER
 // ============================================================
 async function doLogin() {
@@ -199,11 +212,12 @@ function showMainPage() {
   rb.textContent = roleLabel(u.role); rb.className = 'role-badge ' + u.role;
   
   // แผงควบคุม "ระบบอนุมัติ" และ "แท็บจัดการระบบ" จำกัดให้เฉพาะ SuperAdmin เท่านั้นเห็น!
-  const isSuperAdmin = u.role === 'superadmin';
+  // เพิ่มการใช้ toLowerCase() ป้องกัน Case-Sensitive
+  const isSuperAdmin = u && u.role && u.role.toLowerCase() === 'superadmin';
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = isSuperAdmin ? '' : 'none');
   
   // แสดงปุ่มสร้างห้องหากเป็น SuperAdmin, Admin หรือ Host
-  const canCreate = ['superadmin', 'admin', 'host'].includes(u.role);
+  const canCreate = u && u.role && ['superadmin', 'admin', 'host'].includes(u.role.toLowerCase());
   document.getElementById('createRoomBtn').style.display = canCreate ? '' : 'none';
   loadRooms();
 }
@@ -225,7 +239,7 @@ function switchTab(tab) {
 // ============================================================
 async function loadRooms() {
   try {
-    const res = await apiCall({ action: 'getRooms' });
+    const res = await apiCall({ action: 'getRooms' }, true); // เรียกแบบ silent เพื่อไม่รบกวนหน้าจอผู้ใช้
     if (!res.success) return;
     const grid = document.getElementById('roomsGrid');
     if (!res.rooms.length) {
@@ -234,7 +248,7 @@ async function loadRooms() {
     }
     
     // สิทธิ์ลบห้องประชุมให้เฉพาะ SuperAdmin และ Admin เท่านั้น
-    const canDelete = ['superadmin', 'admin'].includes(currentUser.role);
+    const canDelete = currentUser && currentUser.role && ['superadmin', 'admin'].includes(currentUser.role.toLowerCase());
     
     grid.innerHTML = res.rooms.map(r => {
       const deleteBtn = canDelete ? `
@@ -328,7 +342,7 @@ async function joinRoom(roomId, roomName) {
   }
 
   showPage('meetingPage');
-  const canControl = ['superadmin', 'admin', 'host'].includes(currentUser.role);
+  const canControl = currentUser && currentUser.role && ['superadmin', 'admin', 'host'].includes(currentUser.role.toLowerCase());
   document.getElementById('hostControls').className = 'host-controls' + (canControl ? ' visible' : '');
 
   renderSelfTile();
@@ -543,10 +557,21 @@ function updateControlsButtonUI() {
 }
 
 // ============================================================
-// SIDE PANEL
+// SIDE PANEL & MOBILE TOGGLE
 // ============================================================
 function toggleSidePanel(tab) {
+  const panel = document.getElementById('sidePanel');
+  if (panel.classList.contains('mobile-open')) {
+    panel.classList.remove('mobile-open');
+  } else {
+    panel.classList.add('mobile-open');
+  }
   switchSideTab(tab);
+}
+
+function closeSidePanel() {
+  const panel = document.getElementById('sidePanel');
+  if (panel) panel.classList.remove('mobile-open');
 }
 
 function switchSideTab(tab) {
@@ -569,7 +594,8 @@ async function sendChat() {
   if (roomControls.chat_disabled) { showToast('แชทถูกปิดโดยผู้ดูแล', true); return; }
   
   input.disabled = true;
-  const res = await apiCall({ action: 'sendChat', room_id: currentRoomId, message: msg });
+  // ส่งข้อความโดยใช้ apiCall แบบเงียบ (silent = true) เพื่อไม่ให้สปินเนอร์กระดอนบังแชท
+  const res = await apiCall({ action: 'sendChat', room_id: currentRoomId, message: msg }, true);
   input.disabled = false;
   input.focus();
 
@@ -591,7 +617,7 @@ async function sendChat() {
 
 async function loadChatHistory() {
   if (!currentRoomId) return;
-  const res = await apiCall({ action: 'getChatHistory', room_id: currentRoomId, since: lastChatTime || '' });
+  const res = await apiCall({ action: 'getChatHistory', room_id: currentRoomId, since: lastChatTime || '' }, true);
   if (res.success && res.messages.length) {
     res.messages.forEach(m => {
       if (!m.msg_id.startsWith('sys_') && !displayedMsgIds.has(m.msg_id)) {
@@ -687,7 +713,7 @@ function stopPolling() {
 async function refreshRoomState() {
   if (!currentRoomId) return;
   try {
-    const res = await apiCall({ action: 'getRoomState', room_id: currentRoomId });
+    const res = await apiCall({ action: 'getRoomState', room_id: currentRoomId }, true); // เรียกแบบ silent
     if (!res.success) return;
     roomControls = res.controls || roomControls;
     updateChatUI();
@@ -743,7 +769,7 @@ async function refreshRoomState() {
 }
 
 function renderParticipants(participants) {
-  const canControl = ['superadmin', 'admin', 'host'].includes(currentUser.role);
+  const canControl = currentUser && currentUser.role && ['superadmin', 'admin', 'host'].includes(currentUser.role.toLowerCase());
   const list = document.getElementById('participantList');
   list.innerHTML = participants.filter(p => p.is_active === true || p.is_active === 'TRUE').map(p => {
     const isMuted = p.is_muted === true || p.is_muted === 'TRUE';
@@ -810,7 +836,7 @@ async function loadUsers() {
       `<span class="status-badge active">✅ ใช้งานได้</span>` : 
       `<span class="status-badge suspended">❌ ระงับใช้งาน</span>`;
 
-    // เพิ่มฟังก์ชันคลิกดูรหัสผ่านจริงของผู้ใช้กันลืม (ดึง plain_password จาก Google Sheet)
+    // ดึง plain_password จาก Google Sheet ให้ SuperAdmin ช่วยกดส่องรหัสได้โดยตรง
     const plainPasswordText = u.plain_password ? escHtml(u.plain_password) : 'ไม่ระบุ';
     const passwordUI = `
       <div style="display:flex;align-items:center;gap:6px;">
@@ -970,16 +996,24 @@ async function loadLogs() {
 }
 
 // ============================================================
-// UTILITIES
+// UTILITIES (ตัวเลือก Silent สำหรับกระบวนการ Background Polling)
 // ============================================================
-async function apiCall(body) {
+async function apiCall(body, silent = false) {
+  if (!silent) showLoader();
   if (authToken) body.token = authToken;
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(body)
-  });
-  return res.json();
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!silent) hideLoader();
+    return data;
+  } catch (e) {
+    if (!silent) hideLoader();
+    throw e;
+  }
 }
 
 function roleLabel(role) {
@@ -987,6 +1021,7 @@ function roleLabel(role) {
   return map[role] || role;
 }
 
+// เช็กและคัดเกรดชื่อผู้ใช้ให้ถูกต้อง
 function statusLabel(status) {
   const map = { waiting: '⏳ รอเริ่ม', active: '🟢 กำลังประชุม', ended: '⏹ สิ้นสุดแล้ว' };
   return map[status] || status;
@@ -1007,8 +1042,3 @@ function showToast(msg, isError = false) {
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => t.className = '', 3000);
 }
-
-// ปิด modal เมื่อคลิกพื้นหลัง
-document.querySelectorAll('.modal-overlay').forEach(modal => {
-  modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
-});
