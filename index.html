@@ -33,31 +33,33 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
 .page { display: none; min-height: 100vh; }
 .page.active { display: flex; flex-direction: column; }
 
-/* ============ LOGIN PAGE ============ */
-#loginPage {
+/* ============ LOGIN & REGISTER PAGE ============ */
+#loginPage, #registerPage {
   background: linear-gradient(145deg, var(--c-navy) 0%, var(--c-blue) 60%, #1d6fc9 100%);
   align-items: center; justify-content: center;
+  padding: 1rem;
 }
 .login-card {
-  background: var(--c-surface); border-radius: 18px; padding: 3rem 2.5rem;
-  width: 100%; max-width: 420px; box-shadow: var(--shadow-lg);
+  background: var(--c-surface); border-radius: 18px; padding: 2.5rem 2rem;
+  width: 100%; max-width: 440px; box-shadow: var(--shadow-lg);
 }
-.login-logo { text-align: center; margin-bottom: 2rem; }
+.login-logo { text-align: center; margin-bottom: 1.5rem; }
 .login-logo .emblem {
   width: 70px; height: 70px; border-radius: 50%;
   background: var(--c-navy); display: inline-flex; align-items: center; justify-content: center;
-  font-size: 2rem; color: var(--c-gold); margin-bottom: 1rem; border: 3px solid var(--c-gold);
+  font-size: 2rem; color: var(--c-gold); margin-bottom: 0.75rem; border: 3px solid var(--c-gold);
 }
-.login-logo h1 { font-size: 1.1rem; font-weight: 600; color: var(--c-navy); line-height: 1.4; }
+.login-logo h1 { font-size: 1.15rem; font-weight: 600; color: var(--c-navy); line-height: 1.4; }
 .login-logo p { font-size: 0.85rem; color: var(--c-muted); margin-top: 4px; }
-.form-group { margin-bottom: 1.2rem; }
+.form-group { margin-bottom: 1rem; }
 .form-group label { display: block; font-size: 0.85rem; font-weight: 500; color: var(--c-muted); margin-bottom: 6px; }
-.form-group input {
+.form-group input, .form-group select {
   width: 100%; padding: 11px 14px; border: 1.5px solid var(--c-border);
   border-radius: var(--radius); font-family: inherit; font-size: 0.95rem;
   transition: border 0.2s; outline: none; color: var(--c-text);
+  background-color: var(--c-surface);
 }
-.form-group input:focus { border-color: var(--c-accent); }
+.form-group input:focus, .form-group select:focus { border-color: var(--c-accent); }
 .btn-primary {
   width: 100%; padding: 12px; background: var(--c-navy); color: white;
   border: none; border-radius: var(--radius); font-family: inherit; font-size: 1rem;
@@ -66,6 +68,10 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
 .btn-primary:hover { background: var(--c-blue); }
 .btn-primary:active { transform: scale(0.98); }
 .error-msg { background: #fff0f0; color: var(--c-red); padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; margin-top: 1rem; display: none; border-left: 3px solid var(--c-red); }
+
+.auth-links { text-align: center; margin-top: 1.25rem; font-size: 0.88rem; color: var(--c-muted); }
+.auth-links a { color: var(--c-accent); text-decoration: none; font-weight: 500; cursor: pointer; }
+.auth-links a:hover { text-decoration: underline; }
 
 /* ============ MAIN LAYOUT ============ */
 .topbar {
@@ -115,7 +121,7 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
   padding: 1.25rem; cursor: pointer; transition: all 0.2s; position: relative;
 }
 .room-card:hover { border-color: var(--c-accent); box-shadow: var(--shadow); transform: translateY(-2px); }
-.room-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+.room-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; padding-right: 30px; word-break: break-all; }
 .room-card p { font-size: 0.82rem; color: var(--c-muted); margin-bottom: 12px; }
 .room-meta { display: flex; gap: 8px; flex-wrap: wrap; }
 .room-meta span { font-size: 0.78rem; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
@@ -123,7 +129,15 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
 .status-active { background: var(--c-green-lt); color: #007a5e; }
 .status-ended { background: #f0f0f0; color: #666; }
 .room-host { font-size: 0.8rem; color: var(--c-muted); margin-top: 8px; }
-.no-rooms { text-align: center; padding: 3rem; color: var(--c-muted); }
+.btn-delete-room {
+  position: absolute; top: 12px; right: 12px; background: rgba(214,48,49,0.1);
+  color: var(--c-red); border: none; border-radius: 50%; width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center; font-size: 0.8rem;
+  transition: all 0.2s; z-index: 10;
+}
+.btn-delete-room:hover { background: var(--c-red); color: white; transform: scale(1.1); }
+
+.no-rooms { text-align: center; padding: 3rem; color: var(--c-muted); width: 100%; }
 .no-rooms svg { width: 56px; height: 56px; margin-bottom: 1rem; opacity: 0.3; }
 
 /* ============ MEETING ROOM ============ */
@@ -140,11 +154,13 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
 .video-tile .tile-name {
   position: absolute; bottom: 8px; left: 10px; background: rgba(0,0,0,0.65);
   color: white; font-size: 0.78rem; padding: 3px 10px; border-radius: 20px; font-weight: 500;
+  z-index: 5;
 }
 .video-tile .tile-muted {
   position: absolute; top: 8px; right: 8px; background: var(--c-red);
   color: white; width: 26px; height: 26px; border-radius: 50%;
   display: none; align-items: center; justify-content: center; font-size: 0.8rem;
+  z-index: 5;
 }
 .video-tile.muted .tile-muted { display: flex; }
 .video-tile .avatar-bg {
@@ -196,7 +212,7 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
 .chat-messages { flex: 1; overflow-y: auto; padding: 0.75rem; display: flex; flex-direction: column; gap: 8px; }
 .chat-msg { background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px 12px; }
 .chat-msg .msg-sender { font-size: 0.75rem; color: var(--c-accent); font-weight: 600; margin-bottom: 3px; }
-.chat-msg .msg-text { font-size: 0.85rem; color: rgba(255,255,255,0.85); line-height: 1.4; }
+.chat-msg .msg-text { font-size: 0.85rem; color: rgba(255,255,255,0.85); line-height: 1.4; word-break: break-all; }
 .chat-msg .msg-time { font-size: 0.7rem; color: rgba(255,255,255,0.3); margin-top: 4px; }
 .chat-msg.self { background: rgba(46,125,227,0.15); }
 .chat-input-area { padding: 0.75rem; border-top: 1px solid rgba(255,255,255,0.07); }
@@ -244,17 +260,23 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
 
 /* ============ ADMIN PANEL ============ */
 .admin-section { background: var(--c-surface); border-radius: 14px; border: 1px solid var(--c-border); padding: 1.5rem; margin-bottom: 1.5rem; }
-.admin-section h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1.2rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--c-border); color: var(--c-navy); }
+.admin-section h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1.2rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--c-border); color: var(--c-navy); display: flex; justify-content: space-between; align-items: center; }
 .table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; min-width: 600px; }
 thead th { padding: 10px 12px; text-align: left; font-weight: 600; color: var(--c-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; background: var(--c-bg); }
-tbody td { padding: 10px 12px; border-top: 1px solid var(--c-border); }
+tbody td { padding: 10px 12px; border-top: 1px solid var(--c-border); vertical-align: middle; }
 tbody tr:hover { background: var(--c-bg); }
-.btn-sm { padding: 4px 12px; border-radius: 6px; font-family: inherit; font-size: 0.78rem; cursor: pointer; border: none; font-weight: 500; }
+.btn-sm { padding: 6px 12px; border-radius: 6px; font-family: inherit; font-size: 0.78rem; cursor: pointer; border: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
 .btn-sm.edit { background: var(--c-accent-lt); color: var(--c-accent); }
 .btn-sm.del { background: #fff0f0; color: var(--c-red); }
 .btn-sm.toggle-on { background: var(--c-green-lt); color: #007a5e; }
 .btn-sm.toggle-off { background: #fff0f0; color: var(--c-red); }
+
+/* Status Badges */
+.status-badge { padding: 3px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
+.status-badge.active { background: var(--c-green-lt); color: var(--c-green); }
+.status-badge.pending { background: var(--c-gold-lt); color: var(--c-gold); }
+.status-badge.suspended { background: #fff0f0; color: var(--c-red); }
 
 /* ============ MODAL ============ */
 .modal-overlay {
@@ -291,7 +313,7 @@ tbody tr:hover { background: var(--c-bg); }
     <div class="login-logo">
       <div class="emblem">🏛</div>
       <h1>ระบบประชุมออนไลน์<br>เทศบาลตำบลบ้านยาง</h1>
-      <p>สำหรับเจ้าหน้าที่เทศบาลเท่านั้น</p>
+      <p>สำหรับเจ้าหน้าที่เทศบาลและผู้เกี่ยวข้อง</p>
     </div>
     <div class="form-group">
       <label>ชื่อผู้ใช้ (Username)</label>
@@ -303,6 +325,41 @@ tbody tr:hover { background: var(--c-bg); }
     </div>
     <button class="btn-primary" id="loginBtn" onclick="doLogin()">เข้าสู่ระบบ</button>
     <div class="error-msg" id="loginError"></div>
+    <div class="auth-links">
+      ยังไม่มีบัญชีผู้ใช้? <a onclick="showPage('registerPage')">สมัครสมาชิกที่นี่</a>
+    </div>
+  </div>
+</div>
+
+<!-- ===== REGISTER PAGE ===== -->
+<div id="registerPage" class="page">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="emblem">📝</div>
+      <h1>สมัครสมาชิกเข้าใช้งาน<br>ระบบประชุมออนไลน์</h1>
+      <p>เทศบาลตำบลบ้านยาง</p>
+    </div>
+    <div class="form-group">
+      <label>ชื่อ-นามสกุลจริง</label>
+      <input type="text" id="regFullname" placeholder="ชื่อ นามสกุล">
+    </div>
+    <div class="form-group">
+      <label>ชื่อผู้ใช้งาน (Username อังกฤษ/ตัวเลข)</label>
+      <input type="text" id="regUsername" placeholder="เช่น somchai_b" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>แผนก / สำนัก / กอง</label>
+      <input type="text" id="regDept" placeholder="เช่น สำนักปลัดเทศบาล">
+    </div>
+    <div class="form-group">
+      <label>รหัสผ่าน</label>
+      <input type="password" id="regPassword" placeholder="ความยาว 6 ตัวอักษรขึ้นไป" autocomplete="new-password">
+    </div>
+    <button class="btn-primary" id="regBtn" onclick="doRegister()">ยืนยันการสมัครสมาชิก</button>
+    <div class="error-msg" id="regError"></div>
+    <div class="auth-links">
+      มีบัญชีอยู่แล้ว? <a onclick="showPage('loginPage')">กลับไปเข้าสู่ระบบ</a>
+    </div>
   </div>
 </div>
 
@@ -336,21 +393,60 @@ tbody tr:hover { background: var(--c-bg); }
     </div>
     <!-- ADMIN TAB -->
     <div class="tab-content" id="tab-admin">
+      <!-- ส่วนที่ 1: อนุมัติผู้สมัครสมาชิกใหม่ -->
       <div class="admin-section">
-        <h3>จัดการพนักงาน</h3>
-        <div style="margin-bottom:1rem"><button class="btn-create" onclick="openAddUser()">➕ เพิ่มพนักงาน</button></div>
+        <h3>📋 รายการรออนุมัติสมัครสมาชิก <span id="pendingUsersCount" style="font-size:0.85rem;background:var(--c-red);color:white;padding:2px 8px;border-radius:10px;display:none;">0</span></h3>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>ชื่อ-นามสกุล</th><th>Username</th><th>แผนก</th><th>บทบาท</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+            <thead>
+              <tr>
+                <th>ชื่อ-นามสกุล</th>
+                <th>Username</th>
+                <th>แผนก</th>
+                <th>สมัครเมื่อ</th>
+                <th>การจัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="pendingUsersTableBody">
+              <tr><td colspan="5" style="text-align:center;color:var(--c-muted)">ไม่มีรายการรออนุมัติ</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ส่วนที่ 2: จัดการพนักงานทั้งหมด -->
+      <div class="admin-section">
+        <h3>🧑‍💼 รายชื่อพนักงานในระบบ <button class="btn-create" style="padding:4px 10px;font-size:0.8rem" onclick="openAddUser()">➕ เพิ่มรายคน</button></h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ชื่อ-นามสกุล</th>
+                <th>Username</th>
+                <th>แผนก</th>
+                <th>บทบาท</th>
+                <th>สถานะ</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
             <tbody id="usersTableBody"></tbody>
           </table>
         </div>
       </div>
+
+      <!-- ส่วนที่ 3: ประวัติประชุม -->
       <div class="admin-section">
         <h3>ประวัติการประชุม (Log)</h3>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>ห้อง</th><th>ชื่อ</th><th>เข้าร่วม</th><th>ออกจากห้อง</th></tr></thead>
+            <thead>
+              <tr>
+                <th>ห้อง</th>
+                <th>ชื่อ</th>
+                <th>เข้าร่วม</th>
+                <th>ออกจากห้อง</th>
+              </tr>
+            </thead>
             <tbody id="logsTableBody"></tbody>
           </table>
         </div>
@@ -422,6 +518,7 @@ tbody tr:hover { background: var(--c-bg); }
 </div>
 
 <!-- ===== MODALS ===== -->
+<!-- สร้างห้องประชุม -->
 <div class="modal-overlay" id="createRoomModal">
   <div class="modal-box">
     <h2>🏢 สร้างห้องประชุมใหม่</h2>
@@ -435,14 +532,15 @@ tbody tr:hover { background: var(--c-bg); }
   </div>
 </div>
 
+<!-- เพิ่มพนักงานด้วยมือ (Admin Only) -->
 <div class="modal-overlay" id="addUserModal">
   <div class="modal-box">
-    <h2>➕ เพิ่มพนักงาน</h2>
+    <h2>➕ เพิ่มพนักงานเข้าระบบ</h2>
     <div class="form-group"><label>ชื่อ-นามสกุล</label><input type="text" id="newUserFullname" placeholder="ชื่อ นามสกุล"></div>
     <div class="form-group"><label>Username</label><input type="text" id="newUserUsername" placeholder="ชื่อผู้ใช้"></div>
     <div class="form-group"><label>แผนก</label><input type="text" id="newUserDept" placeholder="เช่น สำนักปลัด"></div>
     <div class="form-group"><label>บทบาท</label>
-      <select id="newUserRole" style="width:100%;padding:11px 14px;border:1.5px solid var(--c-border);border-radius:var(--radius);font-family:inherit;font-size:0.95rem">
+      <select id="newUserRole">
         <option value="member">Member — สมาชิกทั่วไป</option>
         <option value="host">Host — เจ้าของห้อง</option>
         <option value="admin">Admin — ผู้ดูแลระบบ</option>
@@ -453,6 +551,32 @@ tbody tr:hover { background: var(--c-bg); }
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal('addUserModal')">ยกเลิก</button>
       <button class="btn-primary" style="width:auto;padding:9px 24px" onclick="createUser()">เพิ่มพนักงาน</button>
+    </div>
+  </div>
+</div>
+
+<!-- แก้ไขพนักงาน & รหัสผ่าน (Admin Only) -->
+<div class="modal-overlay" id="editUserModal">
+  <div class="modal-box">
+    <h2>⚙️ แก้ไขข้อมูลผู้ใช้งาน</h2>
+    <input type="hidden" id="editUserId">
+    <div class="form-group"><label>ชื่อ-นามสกุล</label><input type="text" id="editUserFullname"></div>
+    <div class="form-group"><label>แผนก/กอง</label><input type="text" id="editUserDept"></div>
+    <div class="form-group"><label>บทบาท</label>
+      <select id="editUserRole">
+        <option value="member">Member — สมาชิกทั่วไป</option>
+        <option value="host">Host — เจ้าของห้อง</option>
+        <option value="admin">Admin — ผู้ดูแลระบบ</option>
+        <option value="superadmin">SuperAdmin</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>รหัสผ่านใหม่ (ปล่อยว่างหากไม่ต้องการเปลี่ยน)</label>
+      <input type="password" id="editUserPassword" placeholder="อย่างน้อย 6 หลัก">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('editUserModal')">ยกเลิก</button>
+      <button class="btn-primary" style="width:auto;padding:9px 24px" onclick="saveEditUser()">บันทึกข้อมูล</button>
     </div>
   </div>
 </div>
