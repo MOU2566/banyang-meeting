@@ -29,6 +29,31 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var(--c-bg); color: var(--c-text); min-height: 100vh; font-size: 15px; }
 
+/* ============ GLOBAL LOADING OVERLAY ============ */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 39, 68, 0.75);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  color: white;
+  gap: 15px;
+}
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--c-gold);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ============ PAGE SYSTEM ============ */
 .page { display: none; min-height: 100vh; }
 .page.active { display: flex; flex-direction: column; }
@@ -143,10 +168,10 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
 /* ============ MEETING ROOM ============ */
 #meetingPage { background: #0a1628; }
 #meetingPage .topbar { background: rgba(10,22,40,0.95); border-bottom: 1px solid rgba(255,255,255,0.08); }
-.meeting-body { display: flex; flex: 1; overflow: hidden; }
+.meeting-body { display: flex; flex: 1; overflow: hidden; position: relative; }
 .video-area { flex: 1; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; }
 
-/* ปรับปรุงระบบ Grid วิดีโอให้ขยายเต็มประสิทธิภาพ ป้องกันสัดส่วนเพี้ยน */
+/* Responsive Video Grid */
 .video-grid { 
   display: grid; 
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
@@ -172,10 +197,10 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
   height: 100%; 
   object-fit: cover; 
   border-radius: 12px; 
-  transform: scaleX(-1); /* สะท้อนกระจกเฉพาะตัวผู้ใช้เอง ส่วนของรีโมทจะถูกควบคุมด้วย JS */
+  transform: scaleX(-1);
 }
 .video-tile.remote video {
-  transform: scaleX(1); /* ของคนอื่นไม่ต้องกลับด้านสะท้อนกระจก */
+  transform: scaleX(1);
 }
 .video-tile .tile-name {
   position: absolute; bottom: 8px; left: 10px; background: rgba(15, 39, 68, 0.85);
@@ -199,9 +224,11 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
   box-shadow: 0 4px 10px rgba(0,0,0,0.3);
 }
 
+/* Side Panel & Mobile overlay */
 .side-panel {
-  width: 300px; background: #111e2e; border-left: 1px solid rgba(255,255,255,0.07);
+  width: 320px; background: #111e2e; border-left: 1px solid rgba(255,255,255,0.07);
   display: flex; flex-direction: column; flex-shrink: 0;
+  transition: all 0.3s ease;
 }
 .side-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.07); }
 .side-tab {
@@ -210,9 +237,22 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
   border-bottom: 2px solid transparent;
 }
 .side-tab.active { color: white; border-bottom-color: var(--c-accent); }
-.side-panel-content { flex: 1; overflow-y: auto; }
+.side-panel-content { flex: 1; overflow-y: auto; position: relative; }
 .panel-view { display: none; }
 .panel-view.active { display: flex; flex-direction: column; height: 100%; }
+
+/* Mobile Close Button for Side Panel */
+.btn-close-panel {
+  display: none;
+  background: var(--c-red);
+  color: white;
+  border: none;
+  padding: 8px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
 
 /* Participants panel */
 .participant-list { flex: 1; overflow-y: auto; padding: 0.5rem; }
@@ -265,6 +305,7 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
 .controls-bar {
   background: #0e1d30; border-top: 1px solid rgba(255,255,255,0.07);
   padding: 12px 1.5rem; display: flex; align-items: center; justify-content: center; gap: 12px; flex-shrink: 0;
+  flex-wrap: wrap;
 }
 .ctrl-btn {
   background: rgba(255,255,255,0.08); border: none; color: rgba(255,255,255,0.8);
@@ -292,7 +333,7 @@ body { font-family: 'IBM Plex Sans Thai', 'Sarabun', sans-serif; background: var
 .admin-section { background: var(--c-surface); border-radius: 14px; border: 1px solid var(--c-border); padding: 1.5rem; margin-bottom: 1.5rem; }
 .admin-section h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1.2rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--c-border); color: var(--c-navy); display: flex; justify-content: space-between; align-items: center; }
 .table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; min-width: 600px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; min-width: 750px; }
 thead th { padding: 10px 12px; text-align: left; font-weight: 600; color: var(--c-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; background: var(--c-bg); }
 tbody td { padding: 10px 12px; border-top: 1px solid var(--c-border); vertical-align: middle; }
 tbody tr:hover { background: var(--c-bg); }
@@ -314,7 +355,7 @@ tbody tr:hover { background: var(--c-bg); }
   display: none; align-items: center; justify-content: center; padding: 1rem;
 }
 .modal-overlay.open { display: flex; }
-.modal-box { background: white; border-radius: 16px; padding: 2rem; width: 100%; max-width: 440px; box-shadow: var(--shadow-lg); }
+.modal-box { background: white; border-radius: 16px; padding: 2rem; width: 100%; max-width: 440px; box-shadow: var(--shadow-lg); position: relative; }
 .modal-box h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 1.5rem; color: var(--c-navy); }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.5rem; }
 .btn-secondary { padding: 9px 20px; border: 1.5px solid var(--c-border); border-radius: var(--radius); background: white; font-family: inherit; font-size: 0.9rem; cursor: pointer; }
@@ -325,14 +366,66 @@ tbody tr:hover { background: var(--c-bg); }
 #toast.show { transform: translateX(-50%) translateY(0); }
 #toast.error { background: var(--c-red); }
 
-/* ============ RESPONSIVE ============ */
+/* ============ RESPONSIVE (MOBILE) ============ */
 @media (max-width: 768px) {
-  .side-panel { display: none; }
-  .side-panel.mobile-open { display: flex; position: fixed; right: 0; top: 56px; bottom: 0; z-index: 200; }
+  .topbar { padding: 0 0.8rem; }
+  .topbar-logo { font-size: 0.9rem; }
+  .topbar-user span { display: none; } /* ซ่อนชื่อบนบาร์ในหน้าจอมือถือ */
+  
+  .lobby-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .btn-create { width: 100%; justify-content: center; }
+
+  /* แถบด้านข้างให้ซ้อนลอยทับสัญญาณวิดีโอ (Mobile Slide Overlay) */
+  .side-panel { 
+    display: none; 
+    position: absolute; 
+    right: 0; 
+    top: 0; 
+    bottom: 0; 
+    width: 280px; 
+    z-index: 999; 
+    box-shadow: -5px 0 15px rgba(0,0,0,0.5); 
+  }
+  .side-panel.mobile-open { 
+    display: flex; 
+  }
+  .btn-close-panel {
+    display: block;
+  }
+  
+  .controls-bar {
+    padding: 10px 0.5rem;
+    gap: 8px;
+  }
+  .ctrl-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 0.9rem;
+  }
+  .ctrl-btn label {
+    display: none; /* ซ่อน Label ข้อความใต้ปุ่มบนมือถือเพื่อเพิ่มพื้นที่ */
+  }
+  
+  .host-controls {
+    width: 100%;
+    justify-content: center;
+    margin-top: 5px;
+    padding: 6px;
+  }
+  .host-ctrl-btn {
+    font-size: 0.75rem;
+    padding: 4px 10px;
+  }
 }
 </style>
 </head>
 <body>
+
+<!-- ===== GLOBAL LOADING OVERLAY ===== -->
+<div id="loadingOverlay" class="loading-overlay" style="display:none;">
+  <div class="spinner"></div>
+  <p style="font-weight: 500; letter-spacing: 0.5px;">กำลังดำเนินการ กรุณารอสักครู่...</p>
+</div>
 
 <!-- ===== TOAST ===== -->
 <div id="toast"></div>
@@ -421,9 +514,9 @@ tbody tr:hover { background: var(--c-bg); }
         <div class="no-rooms"><p>กำลังโหลด...</p></div>
       </div>
     </div>
-    <!-- ADMIN TAB -->
+    <!-- ADMIN TAB (SuperAdmin เท่านั้น) -->
     <div class="tab-content" id="tab-admin">
-      <!-- ส่วนที่ 1: อนุมัติผู้สมัครสมาชิกใหม่ (SuperAdmin เท่านั้น) -->
+      <!-- ส่วนที่ 1: อนุมัติผู้สมัครสมาชิกใหม่ -->
       <div class="admin-section">
         <h3>📋 รายการรออนุมัติสมัครสมาชิก <span id="pendingUsersCount" style="font-size:0.85rem;background:var(--c-red);color:white;padding:2px 8px;border-radius:10px;display:none;">0</span></h3>
         <div class="table-wrap">
@@ -522,7 +615,10 @@ tbody tr:hover { background: var(--c-bg); }
         </div>
       </div>
     </div>
+    
+    <!-- แถบดึงด้านข้าง (Side Panel) -->
     <div class="side-panel" id="sidePanel">
+      <button class="btn-close-panel" onclick="closeSidePanel()">✕ ปิดหน้าต่างแชท/ผู้ใช้</button>
       <div class="side-tabs">
         <div class="side-tab active" onclick="switchSideTab('chat')">💬 แชท</div>
         <div class="side-tab" onclick="switchSideTab('participants')">👥 ผู้เข้าร่วม</div>
