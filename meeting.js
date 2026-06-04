@@ -212,9 +212,19 @@ function showMainPage() {
   rb.textContent = roleLabel(u.role); rb.className = 'role-badge ' + u.role;
   
   // แผงควบคุม "ระบบอนุมัติ" และ "แท็บจัดการระบบ" จำกัดให้เฉพาะ SuperAdmin เท่านั้นเห็น!
-  // เพิ่มการใช้ toLowerCase() ป้องกัน Case-Sensitive
+  // คัดกรองตัวแักษรพิมพ์เล็ก-ใหญ่ให้สมบูรณ์
   const isSuperAdmin = u && u.role && u.role.toLowerCase() === 'superadmin';
-  document.querySelectorAll('.admin-only').forEach(el => el.style.display = isSuperAdmin ? '' : 'none');
+  
+  // บังคับเปลี่ยนสไตล์การซ่อน CSS เพื่อแก้ปัญหามองไม่เห็นแผงควบคุม
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.setProperty('display', isSuperAdmin ? 'flex' : 'none', 'important');
+    if (el.tagName === 'DIV' && isSuperAdmin) {
+      el.style.setProperty('display', 'block', 'important');
+    }
+    if (el.tagName === 'TD' && isSuperAdmin) {
+      el.style.setProperty('display', 'table-cell', 'important');
+    }
+  });
   
   // แสดงปุ่มสร้างห้องหากเป็น SuperAdmin, Admin หรือ Host
   const canCreate = u && u.role && ['superadmin', 'admin', 'host'].includes(u.role.toLowerCase());
@@ -382,7 +392,6 @@ function initPeerJS() {
 }
 
 function setupPeer() {
-  // สร้าง Peer ID ที่ระบุโครงสร้างผู้ใช้อย่างถูกต้องเพื่อความปลอดภัยสูงสุด
   const peerId = 'mun_' + currentRoomId + '_' + currentUser.user_id;
   
   peer = new Peer(peerId, { 
@@ -399,7 +408,6 @@ function setupPeer() {
     console.log('PeerJS เปิดเชื่อมต่อสำเร็จ:', id); 
   });
 
-  // รับสายโทรเข้าจากผู้ใช้ท่านอื่นที่พึ่งออนไลน์เข้ามา
   peer.on('call', call => {
     call.answer(localStream);
     call.on('stream', remoteStream => {
@@ -416,7 +424,6 @@ function setupPeer() {
   });
 }
 
-// ฟังก์ชันโทรหาผู้ใช้รายอื่นในห้องที่เข้ามาใหม่
 function connectToPeer(remotePeerId, remoteUserId, remoteFullname) {
   if (!peer || peer.destroyed || peers[remotePeerId]) return;
   
@@ -480,7 +487,6 @@ function renderSelfTile() {
 function addRemoteTile(peerId, stream, name, userId) {
   const existingTile = document.getElementById('tile-' + peerId);
   if (existingTile) {
-    // ป้องกันการแฮงค์ของวิดีโอ อัปเดตสตรีมเมื่อตรวจพบความต่าง
     const videoEl = existingTile.querySelector('video');
     if (videoEl && videoEl.srcObject !== stream) {
       videoEl.srcObject = stream;
@@ -594,7 +600,6 @@ async function sendChat() {
   if (roomControls.chat_disabled) { showToast('แชทถูกปิดโดยผู้ดูแล', true); return; }
   
   input.disabled = true;
-  // ส่งข้อความโดยใช้ apiCall แบบเงียบ (silent = true) เพื่อไม่ให้สปินเนอร์กระดอนบังแชท
   const res = await apiCall({ action: 'sendChat', room_id: currentRoomId, message: msg }, true);
   input.disabled = false;
   input.focus();
@@ -718,7 +723,6 @@ async function refreshRoomState() {
     roomControls = res.controls || roomControls;
     updateChatUI();
 
-    // เช็คกรณีโดนดีด (Kicked)
     const self = (res.participants || []).find(p => p.user_id === currentUser.user_id);
     if (self && (self.is_kicked === true || self.is_kicked === 'TRUE')) {
       stopPolling();
@@ -727,7 +731,6 @@ async function refreshRoomState() {
       return;
     }
 
-    // ดีเทลจัดการปิดไมค์รายห้อง/รายคน
     if ((roomControls.all_muted || (self && (self.is_muted === true || self.is_muted === 'TRUE'))) && micEnabled) {
       if (localStream) localStream.getAudioTracks().forEach(t => t.enabled = false);
       micEnabled = false;
@@ -735,27 +738,22 @@ async function refreshRoomState() {
       showToast('คุณถูกปิดไมโครโฟนโดยผู้ดูแลระบบ', true);
     }
 
-    // บริหารจัดการ WebRTC เชื่อมต่อสมาชิกที่ออนไลน์แบบอัตโนมัติ (Auto-Call)
     const activeParticipants = (res.participants || []).filter(p => p.is_active === true || p.is_active === 'TRUE');
     
     activeParticipants.forEach(p => {
       if (p.user_id !== currentUser.user_id) {
         const expectedPeerId = 'mun_' + currentRoomId + '_' + p.user_id;
-        
-        // หากผู้ใช้นี้ยังไม่มีการโทรเชื่อมต่อสัญญาณ ให้ยิง Call ทันที
         if (!peers[expectedPeerId] && peer && !peer.destroyed) {
           connectToPeer(expectedPeerId, p.user_id, p.fullname || p.username);
         }
       }
     });
 
-    // กำจัด Remote Video Tile ของผู้ใช้ที่ออกจากห้องไปแล้วออกจากหน้าจอ
     const activeUserIds = new Set(activeParticipants.map(p => p.user_id));
     document.querySelectorAll('.video-tile.remote').forEach(tile => {
       const uId = tile.getAttribute('data-user-id');
       if (uId && !activeUserIds.has(uId)) {
         tile.remove();
-        // ล้างหน่วยความจำ Peer
         const matchedPeerId = Object.keys(peers).find(k => peers[k].userId === uId);
         if (matchedPeerId) {
           if (peers[matchedPeerId].call) peers[matchedPeerId].call.close();
@@ -795,11 +793,11 @@ async function loadUsers() {
   const res = await apiCall({ action: 'getUsers' });
   if (!res.success) return;
   
-  // 1. แยกรายชื่อที่สมัครเข้ามาใหม่ "รออนุมัติ" (is_active เป็น "PENDING")
-  const pendingUsers = res.users.filter(u => u.is_active === 'PENDING' || u.is_active === 'pending');
-  const activeAndSuspendedUsers = res.users.filter(u => u.is_active !== 'PENDING' && u.is_active !== 'pending');
+  // 1. แยกรายชื่อผู้สมัครรายใหม่ "รออนุมัติ" (is_active เป็น "PENDING")
+  const pendingUsers = res.users.filter(u => String(u.is_active).toUpperCase() === 'PENDING');
+  const activeAndSuspendedUsers = res.users.filter(u => String(u.is_active).toUpperCase() !== 'PENDING');
   
-  // แสดงจำนวนคำขอบน Badge แถบอนุมัติ
+  // แสดงจำนวนคำขอบบน Badge แถบอนุมัติ
   const badge = document.getElementById('pendingUsersCount');
   if (pendingUsers.length > 0) {
     badge.textContent = pendingUsers.length;
@@ -831,12 +829,11 @@ async function loadUsers() {
   // 2. เรนเดอร์ตารางพนักงานทั้งหมดในระบบ
   const tbody = document.getElementById('usersTableBody');
   tbody.innerHTML = activeAndSuspendedUsers.map(u => {
-    const isActive = u.is_active === true || u.is_active === 'TRUE';
+    const isActive = u.is_active === true || String(u.is_active).toUpperCase() === 'TRUE';
     let statusHTML = isActive ? 
       `<span class="status-badge active">✅ ใช้งานได้</span>` : 
       `<span class="status-badge suspended">❌ ระงับใช้งาน</span>`;
 
-    // ดึง plain_password จาก Google Sheet ให้ SuperAdmin ช่วยกดส่องรหัสได้โดยตรง
     const plainPasswordText = u.plain_password ? escHtml(u.plain_password) : 'ไม่ระบุ';
     const passwordUI = `
       <div style="display:flex;align-items:center;gap:6px;">
@@ -1021,7 +1018,6 @@ function roleLabel(role) {
   return map[role] || role;
 }
 
-// เช็กและคัดเกรดชื่อผู้ใช้ให้ถูกต้อง
 function statusLabel(status) {
   const map = { waiting: '⏳ รอเริ่ม', active: '🟢 กำลังประชุม', ended: '⏹ สิ้นสุดแล้ว' };
   return map[status] || status;
